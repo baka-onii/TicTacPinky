@@ -1,14 +1,20 @@
 body {
-    display: flex;
+    display: inline-block;
     justify-content: center;
     align-items: center;
     height: 100vh;
-    margin: 0;
+    margin-left: 35vw;
+    margin-top: 10vh;
     font-family: Arial, sans-serif;
+}
+
+#rules{
+    display: block;
 }
 
 #large-board {
     display: grid;
+    margin: 10vh, 10vw, 10vh, 10vw;
     grid-template-columns: repeat(3, 150px);
     grid-template-rows: repeat(3, 150px);
     gap: 10px;
@@ -36,6 +42,7 @@ body {
     border: 1px solid #0b0000;
     border-radius: 10px;
     cursor: pointer;
+    color:crimson;
 }
 
 .highlight {
