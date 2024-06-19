@@ -119,7 +119,6 @@ function renderLargeBoard() {
         if (miniBoard.winner) {
             largeCellElement.innerText = miniBoard.winner;
             largeCellElement.classList.add('cell-winner');
-            alert("Game Ended");
         }
     }
 }
