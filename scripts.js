@@ -65,7 +65,7 @@ function handleLargeCellClick(largeIndex) {
     if (nextMoveInLargeCell === -1 || nextMoveInLargeCell === largeIndex) {
         renderMiniBoard(largeIndex);
     } else {
-        alert(`You must play in cell ${nextMoveInLargeCell + 1} of the large board.`);
+        // alert(`You must play in cell ${nextMoveInLargeCell + 1} of the large board.`);
     }
 }
 
