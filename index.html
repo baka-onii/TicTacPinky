@@ -3,12 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TicTacPinky</title>
+    <title>Tic Tac Pinky</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="large-board"></div>
+    <div id="rules">
+        <h1>Tic Tac Pinky</h1>
+        <h2>Rules:</h2>
+        <ul>
+            <li>The game is played on a large 3x3 board, which is composed of 9 mini-boards.</li>
+            <li>Players take turns marking cells in the mini-boards.</li>
+            <li>When a player marks a cell in a mini-board, their opponent must play in the corresponding mini-board on the large board.</li>
+            <li>A player wins a mini-board by marking 3 cells in a row (horizontal, vertical, or diagonal).</li>
+            <li>If a mini-board is won by a player, their mark appears on the corresponding cell of the large board.</li>
+            <li>To win the game, a player must win 3 mini-boards in a row (horizontal, vertical, or diagonal) on the large board.</li>
+            <li>If all cells are filled and no player has won, the game ends in a draw.</li>
+        </ul>
+    </div>
+    <div id="large-board" class="large-board"></div>
     <script src="scripts.js"></script>
-    
 </body>
 </html>
