@@ -1,0 +1,19 @@
+{
+  "name": "tictacpinky",
+  "version": "2.0.0",
+  "description": "TicTacPinky — Ultimate Tic-Tac-Toe with a modern GUI and online multiplayer via shareable links.",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}

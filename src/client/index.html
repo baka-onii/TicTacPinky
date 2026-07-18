@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tic Tac Pinky</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Tic Tac <span class="accent">Pinky</span></h1>
+      <span class="sub">Ultimate Tic-Tac-Toe</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" id="header-menu-btn" type="button">Menu</button>
+    </div>
+  </header>
+
+  <!-- ===== Menu View ===== -->
+  <section id="menu-view" class="view menu-view active">
+    <div class="menu-card">
+      <h2>Play Tic Tac Pinky</h2>
+      <p class="lead">A Tic-Tac-Toe game reimagined — 9 mini-boards in one. Choose how to play.</p>
+      <div class="menu-choices">
+        <button class="menu-choice" id="menu-local" type="button">
+          <span class="title">Local 2-player</span>
+          <span class="desc">Pass-and-play on this device. No server needed.</span>
+        </button>
+        <button class="menu-choice" id="menu-online" type="button">
+          <span class="title">Online match</span>
+          <span class="desc">Create a match and share the link with a friend.</span>
+        </button>
+      </div>
+      <div style="margin-top: 20px;">
+        <button class="rules-toggle" id="rules-toggle" type="button">How to play</button>
+      </div>
+    </div>
+    <div class="rules-content" id="rules-content">
+      <ul>
+        <li>The board is a 3×3 grid of mini-boards, each itself a 3×3 grid.</li>
+        <li>The cell you pick sends your opponent to the mini-board in the corresponding position.</li>
+        <li>Win a mini-board (3-in-a-row) to claim that cell of the large board.</li>
+        <li>Win three mini-boards in a row on the large board to win the game.</li>
+        <li>If your move would send your opponent to a mini-board that's already decided, they may play anywhere.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Lobby View ===== -->
+  <section id="lobby-view" class="view lobby-view">
+    <div class="lobby-card">
+      <h2>Online match</h2>
+
+      <div class="lobby-tabs">
+        <button class="lobby-tab active" data-tab="create" type="button">Create</button>
+        <button class="lobby-tab" data-tab="join" type="button">Join</button>
+      </div>
+
+      <!-- Create panel -->
+      <div class="lobby-panel active" id="panel-create">
+        <div class="field">
+          <label for="create-name">Your name</label>
+          <input type="text" id="create-name" placeholder="e.g. Ana" maxlength="20" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" id="create-btn" type="button" style="width:100%">Create match</button>
+
+        <div id="create-result" style="display:none; margin-top:20px;">
+          <div class="field">
+            <label>Share this link with your friend</label>
+            <div class="share-link">
+              <span class="url" id="share-url"></span>
+              <button class="btn btn-sm" id="copy-link-btn" type="button">Copy</button>
+            </div>
+          </div>
+          <div class="waiting">
+            <span class="spinner"></span>
+            <span id="waiting-text">Waiting for opponent to join…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Join panel -->
+      <div class="lobby-panel" id="panel-join">
+        <div class="field">
+          <label for="join-name">Your name</label>
+          <input type="text" id="join-name" placeholder="e.g. Sam" maxlength="20" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="join-code">Match code</label>
+          <input type="text" id="join-code" placeholder="e.g. K7Q2" maxlength="4" autocomplete="off" style="text-transform:uppercase">
+        </div>
+        <button class="btn btn-primary" id="join-btn" type="button" style="width:100%">Join match</button>
+      </div>
+
+      <div class="error-msg" id="lobby-error"></div>
+    </div>
+  </section>
+
+  <!-- ===== Game View ===== -->
+  <section id="game-view" class="view game-view">
+    <div class="game-layout">
+      <div class="board-area">
+        <div class="status-bar">
+          <div class="turn-info" id="turn-info">
+            <span class="turn-mark x">X</span>
+            <span id="turn-text">X's turn</span>
+          </div>
+          <div class="match-code">
+            Code: <span class="code" id="match-code-display">—</span>
+          </div>
+        </div>
+
+        <div class="game-over-banner" id="game-over-banner">
+          <span class="msg" id="game-over-msg"></span>
+          <button class="btn btn-primary btn-sm" id="rematch-btn" type="button" style="display:none;">Rematch</button>
+        </div>
+
+        <div class="large-board" id="large-board"></div>
+
+        <button class="rules-toggle" id="rules-toggle-game" type="button">How to play</button>
+        <div class="rules-content" id="rules-content-game">
+          <ul>
+            <li>The board is a 3×3 grid of mini-boards, each itself a 3×3 grid.</li>
+            <li>The cell you pick sends your opponent to the mini-board in the corresponding position.</li>
+            <li>Win a mini-board (3-in-a-row) to claim that cell of the large board.</li>
+            <li>Win three mini-boards in a row on the large board to win the game.</li>
+            <li>If your move would send your opponent to a mini-board that's already decided, they may play anywhere.</li>
+          </ul>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card players-card">
+          <div class="player-row" id="player-x">
+            <div class="player-mark x">X</div>
+            <div class="player-info">
+              <span class="player-name" id="player-x-name">Player 1</span>
+              <span class="player-status" id="player-x-status">—</span>
+            </div>
+          </div>
+          <div class="player-row" id="player-o">
+            <div class="player-mark o">O</div>
+            <div class="player-info">
+              <span class="player-name" id="player-o-name">Player 2</span>
+              <span class="player-status" id="player-o-status">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card match-info">
+          <div class="row">
+            <span class="label">Match code</span>
+            <span class="value" id="match-code-sidebar">—</span>
+          </div>
+          <div class="row">
+            <span class="label">Your role</span>
+            <span class="value" id="your-role">—</span>
+          </div>
+          <button class="btn btn-sm copy-link-btn" id="copy-link-sidebar-btn" type="button">Copy invite link</button>
+        </div>
+
+        <div class="card chat-card">
+          <h3>Chat</h3>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Send a message…" maxlength="240" autocomplete="off">
+            <button class="btn btn-sm" id="chat-send-btn" type="button">Send</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Shared game logic + socket.io + app modules -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/game.js"></script>
+  <script src="board.js"></script>
+  <script src="offline.js"></script>
+  <script src="online.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
