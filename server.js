@@ -6,7 +6,17 @@ const { createGame, applyMove } = require('./src/shared/game');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {});
+const io = new Server(server, {
+  cors: {
+    origin: process.env.ALLOWED_ORIGIN || '*',
+    methods: ['GET', 'POST'],
+  },
+  // Trust the reverse proxy so Socket.IO can detect the correct protocol
+});
+
+// Render and similar PaaS hosts terminate SSL at the load balancer.
+// This tells Express to trust X-Forwarded-* headers from the proxy.
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 
@@ -14,6 +24,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'src', 'client')));
 // Serve shared game.js so the browser loads the same logic the server uses
 app.use('/shared', express.static(path.join(__dirname, 'src', 'shared')));
+
+// Health check — Render pings this to confirm the service is alive
+app.get('/health', (req, res) => res.json({ ok: true }));
+
 // SPA fallback: any non-asset route serves index.html (so /?match=XXX works)
 app.get('*', (req, res) => {
   // Only fall back if it doesn't look like a file request
