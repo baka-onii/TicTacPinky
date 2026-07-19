@@ -12,9 +12,28 @@
   let myRole = null;    // 'X' | 'O' | 'spectator'
   let myName = '';
   let matchId = null;
+  let sessionToken = null;
   let chatBound = false;
   let rematchBound = false;
   let hadFirstState = false;
+
+  function getSessionToken() {
+    if (sessionToken) return sessionToken;
+    // Restore from localStorage if available
+    const stored = localStorage.getItem('ttp:session');
+    if (stored) { sessionToken = stored; return sessionToken; }
+    return null;
+  }
+
+  function setSessionToken(token) {
+    sessionToken = token;
+    localStorage.setItem('ttp:session', token);
+  }
+
+  function clearSessionToken() {
+    sessionToken = null;
+    localStorage.removeItem('ttp:session');
+  }
 
   function connect() {
     if (socket && socket.connected) return socket;
@@ -27,9 +46,10 @@
 
     socket.on('connect', () => {
       console.log('[socket] connected', socket.id);
-      // If we already know our match (e.g. reconnecting), rejoin silently
+      // If we already know our match (e.g. reconnecting after refresh), rejoin silently
       if (matchId && myName) {
-        socket.emit('match:join', { id: matchId, name: myName });
+        const token = getSessionToken();
+        socket.emit('match:join', { id: matchId, name: myName, token });
       }
     });
 
@@ -45,12 +65,14 @@
     socket.on('match:created', (payload) => {
       matchId = payload.id;
       myRole = payload.role;
+      if (payload.sessionToken) setSessionToken(payload.sessionToken);
       window.App.onMatchCreated(payload);
     });
 
     socket.on('match:joined', (payload) => {
       matchId = payload.id;
       myRole = payload.role;
+      if (payload.sessionToken) setSessionToken(payload.sessionToken);
       match = {
         id: payload.id,
         state: payload.state,
@@ -121,14 +143,14 @@
   function create(name) {
     myName = name;
     connect();
-    socket.emit('match:create', { name });
+    socket.emit('match:create', { name, token: getSessionToken() });
   }
 
   function join(id, name) {
     matchId = id.toUpperCase();
     myName = name;
     connect();
-    socket.emit('match:join', { id: matchId, name });
+    socket.emit('match:join', { id: matchId, name, token: getSessionToken() });
   }
 
   function handleCellClick(largeIndex, miniIndex) {
@@ -397,6 +419,7 @@
     sendChat,
     getMatchId: () => matchId,
     getMyRole: () => myRole,
+    clearSession: () => { matchId = null; myRole = null; match = null; hadFirstState = false; clearSessionToken(); },
   };
 
   window.OnlineMode = OnlineMode;

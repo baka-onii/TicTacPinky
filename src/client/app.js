@@ -73,6 +73,8 @@
         const url = window.location.origin + window.location.pathname;
         window.history.replaceState({}, '', url);
         showView('menu-view');
+        // Clear online session so a fresh match doesn't accidentally reclaim an old seat
+        window.OnlineMode.clearSession();
       }
     });
   }

@@ -48,10 +48,19 @@ function generateId() {
   return id;
 }
 
-function getRole(match, socketId) {
-  if (match.players.X === socketId) return 'X';
-  if (match.players.O === socketId) return 'O';
+function getRole(match, sessionToken) {
+  if (sessionToken && match.players.X === sessionToken) return 'X';
+  if (sessionToken && match.players.O === sessionToken) return 'O';
   return 'spectator';
+}
+
+// Recipients = every live socket currently attached to this match
+function recipientSocketIds(match) {
+  const ids = [];
+  if (match.sockets.X) ids.push(match.sockets.X);
+  if (match.sockets.O) ids.push(match.sockets.O);
+  for (const sid of match.spectators.values()) ids.push(sid);
+  return ids;
 }
 
 function broadcastMatch(io, match) {
@@ -64,24 +73,23 @@ function broadcastMatch(io, match) {
     },
     chat: match.chat,
   };
-  // Emit to both players and all spectators
-  const recipientIds = [];
-  if (match.players.X) recipientIds.push(match.players.X);
-  if (match.players.O) recipientIds.push(match.players.O);
-  for (const sid of match.spectators) recipientIds.push(sid);
-
-  for (const sid of recipientIds) {
-    io.to(sid).emit('match:state', { ...payload, role: getRole(match, sid) });
+  for (const sid of recipientSocketIds(match)) {
+    // Look up this socket's session token to send the correct role
+    const socket = io.sockets.sockets.get(sid);
+    const token = socket && socket.data ? socket.data.sessionToken : null;
+    io.to(sid).emit('match:state', { ...payload, role: getRole(match, token) });
   }
 }
 
-function createMatch(id, playerName) {
+function createMatch(id, playerName, sessionToken) {
   const match = {
     id,
     state: createGame(),
-    players: { X: null, O: null },
+    // Track players by stable session token (survives reconnects/refreshes)
+    players: { X: sessionToken, O: null },
+    sockets: { X: null, O: null },    // current live socket id per role
     names: { X: playerName, O: null },
-    spectators: new Set(),
+    spectators: new Map(),             // sessionToken -> socketId
     rematchVotes: new Set(),
     chat: [],
   };
@@ -89,52 +97,70 @@ function createMatch(id, playerName) {
   return match;
 }
 
+// Generate a random session token (client-supplied; we just check uniqueness within a match)
+function generateToken() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
 // ---- Socket.IO handlers ----
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  socket.on('match:create', ({ name }) => {
+  socket.on('match:create', ({ name, token }) => {
+    const sessionToken = token || generateToken();
     const id = generateId();
-    // Ensure uniqueness (extremely unlikely collision with 30 chars, but safe)
     while (matches.has(id)) id = generateId();
 
-    const match = createMatch(id, name);
-    match.players.X = socket.id;
+    const match = createMatch(id, name, sessionToken);
+    match.sockets.X = socket.id;
 
-    // Bind this socket to the match
     socket.join(id);
     socket.data.matchId = id;
+    socket.data.sessionToken = sessionToken;
+    socket.data.playerName = name;
 
     socket.emit('match:created', {
       id,
       role: 'X',
+      sessionToken, // client stores it in localStorage
       shareUrl: `/match/${id}`,
     });
     broadcastMatch(io, match);
     console.log(`[create] ${id} by "${name}" (${socket.id})`);
   });
 
-  socket.on('match:join', ({ id, name }) => {
+  socket.on('match:join', ({ id, name, token }) => {
     const match = matches.get(id);
     if (!match) {
       socket.emit('match:error', { error: 'Match not found' });
       return;
     }
 
-    // If the socket was already in this match as a spectator, leave spectator set
-    match.spectators.delete(socket.id);
+    const sessionToken = token || generateToken();
+    socket.data.sessionToken = sessionToken;
 
-    let role = 'spectator';
-    if (!match.players.O) {
-      match.players.O = socket.id;
-      match.names.O = name;
-      role = 'O';
-    } else if (match.players.O === socket.id) {
-      role = 'O';
-    } else if (match.players.X === socket.id) {
+    let role;
+    // Reclaim an existing role if this token already owns one
+    if (match.players.X === sessionToken) {
       role = 'X';
+      match.sockets.X = socket.id;
+      if (name) match.names.X = name;
+    } else if (match.players.O === sessionToken) {
+      role = 'O';
+      match.sockets.O = socket.id;
+      if (name) match.names.O = name;
+    } else if (match.players.O === null) {
+      // O slot is open → take it
+      role = 'O';
+      match.players.O = sessionToken;
+      match.sockets.O = socket.id;
+      match.names.O = name;
     } else {
-      match.spectators.add(socket.id);
+      // Both slots taken by other tokens → spectator
+      role = 'spectator';
+      // Drop any prior spectator entry for this token, then re-add
+      match.spectators.delete(sessionToken);
+      match.spectators.set(sessionToken, socket.id);
     }
 
     socket.join(id);
@@ -144,6 +170,7 @@ io.on('connection', (socket) => {
     socket.emit('match:joined', {
       id,
       role,
+      sessionToken,
       state: match.state,
       players: match.names,
       chat: match.chat,
@@ -156,7 +183,7 @@ io.on('connection', (socket) => {
     const match = matches.get(id);
     if (!match) return;
 
-    const role = getRole(match, socket.id);
+    const role = getRole(match, socket.data.sessionToken);
     if (role === 'spectator') return;
     if (role !== match.state.turn) {
       socket.emit('match:error', { error: 'Not your turn' });
@@ -170,7 +197,6 @@ io.on('connection', (socket) => {
     }
 
     match.state = result.state;
-    // Clear rematch votes on any new move
     match.rematchVotes.clear();
     broadcastMatch(io, match);
   });
@@ -179,27 +205,20 @@ io.on('connection', (socket) => {
     const match = matches.get(id);
     if (!match) return;
 
-    const role = getRole(match, socket.id);
+    const role = getRole(match, socket.data.sessionToken);
     if (role === 'spectator') return;
 
     match.rematchVotes.add(role);
 
-    // Notify all about who voted
-    const recipientIds = [
-      match.players.X,
-      match.players.O,
-      ...match.spectators,
-    ].filter(Boolean);
-    for (const sid of recipientIds) {
+    for (const sid of recipientSocketIds(match)) {
       io.to(sid).emit('rematch:update', { votes: [...match.rematchVotes] });
     }
 
-    // If both players voted, reset the game
     if (match.rematchVotes.has('X') && match.rematchVotes.has('O')) {
       const prevChat = match.chat;
       match.state = createGame();
       match.rematchVotes.clear();
-      match.chat = prevChat; // keep chat history
+      match.chat = prevChat;
       broadcastMatch(io, match);
       console.log(`[rematch] ${id} reset`);
     }
@@ -209,20 +228,14 @@ io.on('connection', (socket) => {
     const match = matches.get(id);
     if (!match) return;
 
-    const role = getRole(match, socket.id);
-    const name = socket.data.playerName || (match.names.X === socket.id ? match.names.X : match.names.O) || 'Spectator';
+    const role = getRole(match, socket.data.sessionToken);
+    const name = socket.data.playerName || match.names[role] || 'Spectator';
 
     const msg = { from: role, name, role, text, ts: Date.now() };
     match.chat.push(msg);
-    // Cap chat history
     if (match.chat.length > 200) match.chat = match.chat.slice(-100);
 
-    const recipientIds = [
-      match.players.X,
-      match.players.O,
-      ...match.spectators,
-    ].filter(Boolean);
-    for (const sid of recipientIds) {
+    for (const sid of recipientSocketIds(match)) {
       io.to(sid).emit('chat:message', msg);
     }
   });
@@ -235,34 +248,31 @@ io.on('connection', (socket) => {
     const match = matches.get(matchId);
     if (!match) return;
 
-    // Remove from match
-    if (match.players.X === socket.id) {
-      match.players.X = null;
+    // Clear only the live socket pointer — KEEP the session token so the player
+    // can reclaim their seat on reconnect. Only notify others they went offline.
+    if (match.sockets.X === socket.id) match.sockets.X = null;
+    if (match.sockets.O === socket.id) match.sockets.O = null;
+    // For spectators, remove by value
+    for (const [tok, sid] of match.spectators) {
+      if (sid === socket.id) { match.spectators.delete(tok); break; }
     }
-    if (match.players.O === socket.id) {
-      match.players.O = null;
-    }
-    match.spectators.delete(socket.id);
     match.rematchVotes.clear();
 
-    // Notify remaining participants
-    const recipientIds = [
-      match.players.X,
-      match.players.O,
-      ...match.spectators,
-    ].filter(Boolean);
-    for (const sid of recipientIds) {
+    for (const sid of recipientSocketIds(match)) {
       io.to(sid).emit('match:peer-left', {
-        role: 'unknown',
         players: match.names,
         state: match.state,
       });
     }
 
-    // Clean up empty matches after a delay
+    // Clean up matches with NO live sockets and no reclaimable seat tokens.
+    // We keep the match around if at least one seat token exists, so a brief
+    // disconnect doesn't wipe the match.
     setTimeout(() => {
       const m = matches.get(matchId);
-      if (m && !m.players.X && !m.players.O && m.spectators.size === 0) {
+      if (!m) return;
+      const noLiveSockets = !m.sockets.X && !m.sockets.O && m.spectators.size === 0;
+      if (noLiveSockets) {
         matches.delete(matchId);
         console.log(`[cleanup] match ${matchId} removed`);
       }
