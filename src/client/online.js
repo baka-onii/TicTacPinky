@@ -62,6 +62,7 @@
     });
 
     socket.on('match:state', (payload) => {
+      const wasWaiting = !hadFirstState;
       match = {
         id: payload.id,
         state: payload.state,
@@ -69,7 +70,12 @@
         chat: payload.chat || [],
       };
       myRole = payload.role || myRole;
+      hadFirstState = true;
       renderGame();
+      // If the creator was sitting in the lobby and O just joined, jump to game view
+      if (wasWaiting && typeof window.App.onMatchState === 'function') {
+        window.App.onMatchState();
+      }
     });
 
     socket.on('match:error', ({ error }) => {
@@ -78,9 +84,15 @@
 
     socket.on('chat:message', (msg) => {
       if (!match) return;
+      const isMine = msg.role === myRole;
       match.chat.push(msg);
       appendChatMessage(msg);
       scrollChatToBottom();
+      // Show popup + sound only for messages from others, when the board is visible
+      if (!isMine) {
+        showChatPopup(msg);
+        playChatSound();
+      }
     });
 
     socket.on('rematch:update', ({ votes }) => {
@@ -269,6 +281,79 @@
   function scrollChatToBottom() {
     const container = document.getElementById('chat-messages');
     container.scrollTop = container.scrollHeight;
+  }
+
+  // ----- Chat popups + sound (only when board is in view) -----
+  function isBoardVisible() {
+    const gameView = document.getElementById('game-view');
+    return gameView && gameView.classList.contains('active');
+  }
+
+  function showChatPopup(msg) {
+    if (!isBoardVisible()) return;
+    const stack = document.getElementById('chat-toast-stack');
+    if (!stack) return;
+
+    const fromClass = msg.role === 'X' ? 'x' : msg.role === 'O' ? 'o' : 'spec';
+    const label = msg.role === 'spectator' ? 'Spectator' : (msg.name || msg.role);
+
+    const toast = document.createElement('div');
+    toast.className = 'chat-toast';
+    toast.innerHTML = `<span class="from ${fromClass}">${escapeHtml(label)}:</span> ${escapeHtml(msg.text)}`;
+    stack.appendChild(toast);
+    // Animate in
+    requestAnimationFrame(() => toast.classList.add('show'));
+
+    // Auto-dismiss after 4s
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+
+    // Cap stack height — keep at most 4 popups
+    while (stack.children.length > 4) {
+      stack.firstElementChild.remove();
+    }
+  }
+
+  // Synthesize a short two-tone notification beep with the Web Audio API.
+  // No audio file needed — the tone is generated on the fly.
+  let audioCtx = null;
+  function playChatSound() {
+    if (!isBoardVisible()) return;
+    try {
+      if (!audioCtx) {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return;
+        audioCtx = new Ctor();
+      }
+      // Browsers suspend the context until a user gesture has happened.
+      // We try to resume; if it stays suspended we silently bail out.
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+
+      const now = audioCtx.currentTime;
+      // Two quick ascending tones (a pleasant "ba-ding")
+      const tones = [
+        { freq: 880, start: 0.00, dur: 0.12 },
+        { freq: 1320, start: 0.10, dur: 0.16 },
+      ];
+      for (const t of tones) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = t.freq;
+        gain.gain.setValueAtTime(0, now + t.start);
+        gain.gain.linearRampToValueAtTime(0.18, now + t.start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + t.start + t.dur);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now + t.start);
+        osc.stop(now + t.start + t.dur + 0.02);
+      }
+    } catch {
+      // ignore audio errors
+    }
   }
 
   function escapeHtml(s) {

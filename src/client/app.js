@@ -169,6 +169,12 @@
     window.history.replaceState({}, '', `?match=${payload.id}`);
   }
 
+  // Called by OnlineMode when the server broadcasts a state update
+  // (e.g. O just joined). Auto-advances the creator from the lobby to the game view.
+  function onMatchState() {
+    showView('game-view');
+  }
+
   function onMatchJoined(payload) {
     // Re-enable buttons and jump to game view
     document.getElementById('join-btn').disabled = false;
@@ -211,6 +217,7 @@
     toast,
     onMatchCreated,
     onMatchJoined,
+    onMatchState,
     showView,
     buildShareUrl,
   };
